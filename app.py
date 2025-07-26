@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
 import os
-import numpy as np
-import faiss
+from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
+import psycopg2
+from pgvector.psycopg2 import register_vector
+import numpy as np
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -10,17 +11,53 @@ app = Flask(__name__)
 # Initialize the sentence transformer model for embeddings
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Initialize FAISS index for vector storage
-dimension = 384  # Dimension of the embeddings from all-MiniLM-L6-v2
-index = faiss.IndexFlatL2(dimension)
+# Database connection parameters
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+DB_NAME = os.environ.get('DB_NAME', 'embeddings_db')
+DB_USER = os.environ.get('DB_USER', 'postgres')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', 'postgres')
+DB_PORT = os.environ.get('DB_PORT', '5432')
 
-# In-memory storage for text prompts (for demonstration)
-text_storage = []
+def get_db_connection():
+    """Create a database connection"""
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        port=DB_PORT
+    )
+    register_vector(conn)
+    return conn
+
+def init_db():
+    """Initialize the database tables"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Create table for storing embeddings
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS embeddings (
+            id SERIAL PRIMARY KEY,
+            text TEXT NOT NULL,
+            embedding VECTOR(384),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "healthy"}), 200
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return jsonify({"status": "healthy"}), 200
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.route('/embed', methods=['POST'])
 def create_embedding():
@@ -36,20 +73,28 @@ def create_embedding():
             return jsonify({"error": "Text cannot be empty"}), 400
 
         # Generate embedding
-        embedding = model.encode([text])
+        embedding = model.encode([text])[0]
 
-        # Store in FAISS index
-        index.add(embedding.astype('float32'))
+        # Store in database
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-        # Store the original text (for demonstration)
-        text_storage.append(text)
+        cur.execute(
+            "INSERT INTO embeddings (text, embedding) VALUES (%s, %s) RETURNING id",
+            (text, embedding.tolist())
+        )
+
+        embedding_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
 
         # Return success response with embedding info
         return jsonify({
             "message": "Embedding created and stored successfully",
             "text": text,
-            "embedding_id": len(text_storage) - 1,
-            "embedding_dimension": embedding.shape[1]
+            "embedding_id": embedding_id,
+            "embedding_dimension": len(embedding)
         }), 201
 
     except Exception as e:
@@ -72,21 +117,32 @@ def search_similar():
         k = data.get('k', 5)
 
         # Generate embedding for search query
-        query_embedding = model.encode([text])
+        query_embedding = model.encode([text])[0]
 
-        # Search in FAISS index
-        distances, indices = index.search(query_embedding.astype('float32'), k)
+        # Search in database
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-        # Prepare results
+        cur.execute(
+            """
+            SELECT id, text, embedding <-> %s AS distance
+            FROM embeddings
+            ORDER BY embedding <-> %s
+            LIMIT %s
+            """,
+            (query_embedding.tolist(), query_embedding.tolist(), k)
+        )
+
         results = []
-        for i in range(len(indices[0])):
-            idx = indices[0][i]
-            if idx < len(text_storage):  # Check if index is valid
-                results.append({
-                    "text": text_storage[idx],
-                    "distance": float(distances[0][i]),
-                    "id": int(idx)
-                })
+        for row in cur.fetchall():
+            results.append({
+                "id": row[0],
+                "text": row[1],
+                "distance": float(row[2])
+            })
+
+        cur.close()
+        conn.close()
 
         return jsonify({
             "query": text,
@@ -99,11 +155,35 @@ def search_similar():
 @app.route('/texts', methods=['GET'])
 def get_all_texts():
     """Get all stored texts"""
-    return jsonify({
-        "texts": text_storage,
-        "count": len(text_storage)
-    }), 200
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT id, text, created_at FROM embeddings ORDER BY created_at DESC")
+        rows = cur.fetchall()
+
+        texts = []
+        for row in rows:
+            texts.append({
+                "id": row[0],
+                "text": row[1],
+                "created_at": row[2].isoformat() if row[2] else None
+            })
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "texts": texts,
+            "count": len(texts)
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to retrieve texts: {str(e)}"}), 500
 
 if __name__ == '__main__':
+    # Initialize database
+    init_db()
+
     # Run the app
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)

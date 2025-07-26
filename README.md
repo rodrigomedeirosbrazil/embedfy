@@ -1,6 +1,6 @@
 # Embedding Microservice
 
-A simple microservice that receives text prompts via HTTP requests, creates embeddings (vectors) from the text, and stores them in a vector database.
+A microservice that receives text prompts via HTTP requests, creates embeddings (vectors) from the text, and stores them in a PostgreSQL vector database.
 
 ## Features
 
@@ -129,4 +129,28 @@ The service uses the `all-MiniLM-L6-v2` model from Sentence Transformers, which 
 
 ## Storage
 
-The service uses FAISS (Facebook AI Similarity Search) for efficient vector similarity search and storage. Note that the current implementation stores vectors in memory, so they will be lost when the service is restarted.
+The service uses PostgreSQL with the pgvector extension for persistent vector storage. This allows embeddings to be stored permanently and survive service restarts.
+
+## Docker Support
+
+The service includes Docker support for easy deployment:
+
+1. Build and run with Docker Compose:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. The service will be available at `http://localhost:5000`
+
+3. To stop the services:
+   ```bash
+   docker-compose down
+   ```
+
+### Docker Configuration
+
+The docker-compose.yml file defines two services:
+- `app`: The embedding microservice
+- `db`: PostgreSQL database with pgvector extension
+
+Environment variables can be modified in the docker-compose.yml file as needed.
