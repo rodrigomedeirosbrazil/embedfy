@@ -27,13 +27,25 @@ def get_db_connection():
         password=DB_PASSWORD,
         port=DB_PORT
     )
-    register_vector(conn)
     return conn
 
 def init_db():
     """Initialize the database tables"""
     conn = get_db_connection()
     cur = conn.cursor()
+
+    # Enable pgvector extension
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        conn.commit()
+        # Now register the vector type after creating the extension
+        register_vector(conn)
+    except Exception as e:
+        print(f"Warning: Could not create vector extension: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return
 
     # Create table for storing embeddings
     cur.execute("""
@@ -125,9 +137,9 @@ def search_similar():
 
         cur.execute(
             """
-            SELECT id, text, embedding <-> %s AS distance
+            SELECT id, text, embedding <-> %s::vector AS distance
             FROM embeddings
-            ORDER BY embedding <-> %s
+            ORDER BY embedding <-> %s::vector
             LIMIT %s
             """,
             (query_embedding.tolist(), query_embedding.tolist(), k)
