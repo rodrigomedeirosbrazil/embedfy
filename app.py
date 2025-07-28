@@ -151,16 +151,48 @@ def embed_file(file_path, chunk_size=500, overlap=100):
         print(f"Error embedding file '{file_path}': {str(e)}")
         return False
 
+def embed_directory(dir_path, chunk_size=500, overlap=100):
+    """Recursively embed all text files in a directory"""
+    try:
+        # Check if directory exists
+        if not os.path.exists(dir_path):
+            print(f"Error: Directory '{dir_path}' not found")
+            return False
+
+        if not os.path.isdir(dir_path):
+            print(f"Error: '{dir_path}' is not a directory")
+            return False
+
+        # Process all text files recursively
+        total_files = 0
+        successful_files = 0
+
+        for root, dirs, files in os.walk(dir_path):
+            for file in files:
+                # Process only text files
+                if file.endswith('.txt'):
+                    file_path = os.path.join(root, file)
+                    total_files += 1
+                    if embed_file(file_path, chunk_size, overlap):
+                        successful_files += 1
+
+        print(f"Processed {successful_files} of {total_files} text files in directory '{dir_path}'")
+        return successful_files == total_files
+
+    except Exception as e:
+        print(f"Error embedding directory '{dir_path}': {str(e)}")
+        return False
+
 if __name__ == '__main__':
     import sys
     import argparse
 
     # Check if we're running in CLI mode
     if len(sys.argv) > 1 and sys.argv[1] == 'embed-file':
-        # CLI mode for embedding files
-        parser = argparse.ArgumentParser(description='Embed a text file into the vector database')
+        # CLI mode for embedding files or directories
+        parser = argparse.ArgumentParser(description='Embed text files into the vector database')
         parser.add_argument('command', help='Command to run (embed-file)')
-        parser.add_argument('file_path', help='Path to the text file to embed')
+        parser.add_argument('path', help='Path to the text file or directory to embed')
         parser.add_argument('--chunk-size', type=int, default=500, help='Size of chunks in characters (default: 500)')
         parser.add_argument('--overlap', type=int, default=100, help='Overlap between chunks in characters (default: 100)')
 
@@ -169,8 +201,15 @@ if __name__ == '__main__':
         # Initialize database
         init_db()
 
-        # Embed the file
-        success = embed_file(args.file_path, args.chunk_size, args.overlap)
+        # Check if path is a file or directory and process accordingly
+        if os.path.isfile(args.path):
+            success = embed_file(args.path, args.chunk_size, args.overlap)
+        elif os.path.isdir(args.path):
+            success = embed_directory(args.path, args.chunk_size, args.overlap)
+        else:
+            print(f"Error: Path '{args.path}' does not exist")
+            success = False
+
         sys.exit(0 if success else 1)
     else:
         # Web server mode (default)

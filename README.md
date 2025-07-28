@@ -160,24 +160,31 @@ Environment variables can be modified in the docker-compose.yml file as needed.
 The service also includes a command line interface for embedding text files directly:
 
 ```bash
-python app.py embed-file <file_path> [--chunk-size N] [--overlap N]
+python app.py embed-file <path> [--chunk-size N] [--overlap N]
 ```
+
+The path can be either a text file or a directory. If a directory is specified,
+all `.txt` files within the directory and its subdirectories will be processed.
 
 ### Arguments
 
-- `file_path`: Path to the text file to embed (required)
+- `path`: Path to the text file or directory to embed (required)
 - `--chunk-size`: Size of chunks in characters (default: 500)
 - `--overlap`: Overlap between chunks in characters (default: 100)
 
-### Example
+### Examples
 
 ```bash
+# Process a single file
 python app.py embed-file ./documents/myfile.txt --chunk-size 1000 --overlap 200
+
+# Process all text files in a directory recursively
+python app.py embed-file ./documents/ --chunk-size 1000 --overlap 200
 ```
 
 This will:
-- Read the specified text file
-- Split it into chunks of 1000 characters with 200 characters overlap
+- Read the specified text file or all `.txt` files in the directory
+- Split each file into chunks of the specified size with overlap
 - Generate embeddings for each chunk
 - Store the embeddings in the database with metadata (filename, chunk number)
 
