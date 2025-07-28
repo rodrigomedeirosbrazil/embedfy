@@ -154,3 +154,38 @@ The docker-compose.yml file defines two services:
 - `db`: PostgreSQL database with pgvector extension
 
 Environment variables can be modified in the docker-compose.yml file as needed.
+
+## Command Line Interface
+
+The service also includes a command line interface for embedding text files directly:
+
+```bash
+python app.py embed-file <file_path> [--chunk-size N] [--overlap N]
+```
+
+### Arguments
+
+- `file_path`: Path to the text file to embed (required)
+- `--chunk-size`: Size of chunks in characters (default: 500)
+- `--overlap`: Overlap between chunks in characters (default: 100)
+
+### Example
+
+```bash
+python app.py embed-file ./documents/myfile.txt --chunk-size 1000 --overlap 200
+```
+
+This will:
+- Read the specified text file
+- Split it into chunks of 1000 characters with 200 characters overlap
+- Generate embeddings for each chunk
+- Store the embeddings in the database with metadata (filename, chunk number)
+
+### Metadata
+
+When using the CLI, the following metadata is automatically stored with each embedding:
+- `filename`: The name of the source file
+- `chunk_number`: The sequential number of the chunk (starting from 1)
+- `created_at`: Timestamp when the embedding was created
+
+This metadata can be viewed when retrieving all texts using the `/texts` endpoint.
