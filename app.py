@@ -170,7 +170,7 @@ def embed_directory(dir_path, chunk_size=500, overlap=100):
         for root, dirs, files in os.walk(dir_path):
             for file in files:
                 # Process only text files
-                if file.endswith('.txt'):
+                if file.endswith('.txt') or file.endswith('.md'):
                     file_path = os.path.join(root, file)
                     total_files += 1
                     if embed_file(file_path, chunk_size, overlap):
