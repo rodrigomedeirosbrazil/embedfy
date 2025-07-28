@@ -183,34 +183,104 @@ def embed_directory(dir_path, chunk_size=500, overlap=100):
         print(f"Error embedding directory '{dir_path}': {str(e)}")
         return False
 
+def search_similar_cli(query_text, k=5):
+    """Search for similar texts using vector similarity from CLI"""
+    try:
+        # Generate embedding for search query
+        query_embedding = model.encode([query_text])[0]
+
+        # Search in database
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT id, text, embedding <-> %s::vector AS distance, filename, chunk_number
+            FROM embeddings
+            ORDER BY embedding <-> %s::vector
+            LIMIT %s
+            """,
+            (query_embedding.tolist(), query_embedding.tolist(), k)
+        )
+
+        results = []
+        for row in cur.fetchall():
+            results.append({
+                "id": row[0],
+                "text": row[1],
+                "distance": float(row[2]),
+                "filename": row[3],
+                "chunk_number": row[4]
+            })
+
+        cur.close()
+        conn.close()
+
+        return results
+
+    except Exception as e:
+        print(f"Error searching: {str(e)}")
+        return []
+
 if __name__ == '__main__':
     import sys
     import argparse
 
     # Check if we're running in CLI mode
-    if len(sys.argv) > 1 and sys.argv[1] == 'embed-file':
-        # CLI mode for embedding files or directories
-        parser = argparse.ArgumentParser(description='Embed text files into the vector database')
-        parser.add_argument('command', help='Command to run (embed-file)')
-        parser.add_argument('path', help='Path to the text file or directory to embed')
-        parser.add_argument('--chunk-size', type=int, default=500, help='Size of chunks in characters (default: 500)')
-        parser.add_argument('--overlap', type=int, default=100, help='Overlap between chunks in characters (default: 100)')
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'embed-file':
+            # CLI mode for embedding files or directories
+            parser = argparse.ArgumentParser(description='Embed text files into the vector database')
+            parser.add_argument('command', help='Command to run (embed-file)')
+            parser.add_argument('path', help='Path to the text file or directory to embed')
+            parser.add_argument('--chunk-size', type=int, default=500, help='Size of chunks in characters (default: 500)')
+            parser.add_argument('--overlap', type=int, default=100, help='Overlap between chunks in characters (default: 100)')
 
-        args = parser.parse_args()
+            args = parser.parse_args()
 
-        # Initialize database
-        init_db()
+            # Initialize database
+            init_db()
 
-        # Check if path is a file or directory and process accordingly
-        if os.path.isfile(args.path):
-            success = embed_file(args.path, args.chunk_size, args.overlap)
-        elif os.path.isdir(args.path):
-            success = embed_directory(args.path, args.chunk_size, args.overlap)
+            # Check if path is a file or directory and process accordingly
+            if os.path.isfile(args.path):
+                success = embed_file(args.path, args.chunk_size, args.overlap)
+            elif os.path.isdir(args.path):
+                success = embed_directory(args.path, args.chunk_size, args.overlap)
+            else:
+                print(f"Error: Path '{args.path}' does not exist")
+                success = False
+
+            sys.exit(0 if success else 1)
+        elif sys.argv[1] == 'search':
+            # CLI mode for searching
+            parser = argparse.ArgumentParser(description='Search for similar texts in the vector database')
+            parser.add_argument('command', help='Command to run (search)')
+            parser.add_argument('query', help='Search query text')
+            parser.add_argument('--k', type=int, default=5, help='Number of results to return (default: 5)')
+
+            args = parser.parse_args()
+
+            # Initialize database
+            init_db()
+
+            # Perform search
+            results = search_similar_cli(args.query, args.k)
+
+            # Display results
+            print(f"Search results for: '{args.query}'")
+            print("=" * 50)
+            for i, result in enumerate(results, 1):
+                print(f"{i}. Distance: {result['distance']:.4f}")
+                print(f"   Filename: {result['filename'] or 'N/A'}")
+                print(f"   Chunk: {result['chunk_number'] or 'N/A'}")
+                print(f"   Text: {result['text']}")
+                print()
+
+            sys.exit(0)
         else:
-            print(f"Error: Path '{args.path}' does not exist")
-            success = False
-
-        sys.exit(0 if success else 1)
+            print(f"Error: Unknown command '{sys.argv[1]}'")
+            print("Available commands: embed-file, search")
+            sys.exit(1)
     else:
         # Web server mode (default)
         # Initialize Flask app

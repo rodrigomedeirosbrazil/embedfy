@@ -159,6 +159,8 @@ Environment variables can be modified in the docker-compose.yml file as needed.
 
 The service also includes a command line interface for embedding text files directly:
 
+## Embed Files
+
 ```bash
 python app.py embed-file <path> [--chunk-size N] [--overlap N]
 ```
@@ -187,6 +189,29 @@ This will:
 - Split each file into chunks of the specified size with overlap
 - Generate embeddings for each chunk
 - Store the embeddings in the database with metadata (filename, chunk number)
+
+## Search
+
+```bash
+python app.py search <query> [--k N]
+```
+
+Search for similar texts in the database using vector similarity.
+
+### Arguments
+
+- `query`: Search query text (required)
+- `--k`: Number of results to return (default: 5)
+
+### Examples
+
+```bash
+# Search with default number of results (5)
+python app.py search "machine learning algorithms"
+
+# Search and return 10 results
+python app.py search "artificial intelligence" --k 10
+```
 
 ### Metadata
 
