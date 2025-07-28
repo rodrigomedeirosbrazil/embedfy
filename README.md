@@ -154,3 +154,70 @@ The docker-compose.yml file defines two services:
 - `db`: PostgreSQL database with pgvector extension
 
 Environment variables can be modified in the docker-compose.yml file as needed.
+
+## Command Line Interface
+
+The service also includes a command line interface for embedding text files directly:
+
+## Embed Files
+
+```bash
+python app.py embed-file <path> [--chunk-size N] [--overlap N]
+```
+
+The path can be either a text file or a directory. If a directory is specified,
+all `.txt` files within the directory and its subdirectories will be processed.
+
+### Arguments
+
+- `path`: Path to the text file or directory to embed (required)
+- `--chunk-size`: Size of chunks in characters (default: 500)
+- `--overlap`: Overlap between chunks in characters (default: 100)
+
+### Examples
+
+```bash
+# Process a single file
+python app.py embed-file ./documents/myfile.txt --chunk-size 1000 --overlap 200
+
+# Process all text files in a directory recursively
+python app.py embed-file ./documents/ --chunk-size 1000 --overlap 200
+```
+
+This will:
+- Read the specified text file or all `.txt` files in the directory
+- Split each file into chunks of the specified size with overlap
+- Generate embeddings for each chunk
+- Store the embeddings in the database with metadata (filename, chunk number)
+
+## Search
+
+```bash
+python app.py search <query> [--k N]
+```
+
+Search for similar texts in the database using vector similarity.
+
+### Arguments
+
+- `query`: Search query text (required)
+- `--k`: Number of results to return (default: 5)
+
+### Examples
+
+```bash
+# Search with default number of results (5)
+python app.py search "machine learning algorithms"
+
+# Search and return 10 results
+python app.py search "artificial intelligence" --k 10
+```
+
+### Metadata
+
+When using the CLI, the following metadata is automatically stored with each embedding:
+- `filename`: The name of the source file
+- `chunk_number`: The sequential number of the chunk (starting from 1)
+- `created_at`: Timestamp when the embedding was created
+
+This metadata can be viewed when retrieving all texts using the `/texts` endpoint.
